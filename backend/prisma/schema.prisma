@@ -1,0 +1,222 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
+
+model Admin {
+  id        String     @id @default(uuid())
+  name      String
+  email     String     @unique
+  password  String
+  role      AdminRole  @default(ADMIN)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  @@index([email])
+}
+
+enum VenueStatus {
+  OPEN
+  CLOSED
+  TEMPORARILY_CLOSED
+  COMING_SOON
+  MAINTENANCE
+}
+
+model Venue {
+  id             String                @id @default(uuid())
+  name           String
+  description    String?
+  building       String?
+  latitude       Float?
+  longitude      Float?
+  googleMapsLink String?
+  phone          String?
+  status         VenueStatus           @default(OPEN)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  deletedAt      DateTime?
+  images         VenueImage[]
+  operatingHours VenueOperatingHours[]
+  categories     VenueCategory[]
+  menuItems      MenuItem[]
+  reviews        Review[]
+
+  @@index([name])
+}
+
+model VenueImage {
+  id           String   @id @default(uuid())
+  venueId      String
+  venue        Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  url          String
+  publicId     String
+  width        Int?
+  height       Int?
+  altText      String?
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+}
+
+enum Day {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model VenueOperatingHours {
+  id          String   @id @default(uuid())
+  venueId     String
+  venue       Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  day         Day
+  openingTime String   @default("09:00") // Format "HH:MM"
+  closingTime String   @default("22:00") // Format "HH:MM"
+  isClosed    Boolean  @default(false)
+}
+
+model VenueCategory {
+  id           String     @id @default(uuid())
+  venueId      String
+  venue        Venue      @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name         String
+  displayOrder Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+  menuItems    MenuItem[]
+
+  @@index([name])
+}
+
+model MenuItem {
+  id              String          @id @default(uuid())
+  venueId         String
+  venue           Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        VenueCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  price           Float
+  available       Boolean         @default(true)
+  featured        Boolean         @default(false)
+  preparationTime Int             @default(15) // In minutes
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+  images          MenuItemImage[]
+  tags            MenuItemTag[]
+
+  @@index([name])
+}
+
+model MenuItemImage {
+  id           String   @id @default(uuid())
+  menuItemId   String
+  menuItem     MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  url          String
+  publicId     String
+  width        Int?
+  height       Int?
+  altText      String?
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+}
+
+model Tag {
+  id        String        @id @default(uuid())
+  name      String        @unique
+  createdAt DateTime      @default(now())
+  menuItems MenuItemTag[]
+
+  @@index([name])
+}
+
+model MenuItemTag {
+  id         String   @id @default(uuid())
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  tagId      String
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, tagId])
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  SNACKS
+  DINNER
+}
+
+model MessMenu {
+  id        String   @id @default(uuid())
+  day       Day
+  mealType  MealType
+  dishName  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([day, mealType, dishName])
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Announcement {
+  id          String             @id @default(uuid())
+  title       String
+  description String
+  priority    Priority           @default(MEDIUM)
+  status      AnnouncementStatus @default(PUBLISHED)
+  publishDate DateTime           @default(now())
+  pinned      Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  deletedAt   DateTime?
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminId    String?
+  adminEmail String?
+  action     String // CREATE, UPDATE, DELETE, RESTORE
+  entity     String // Venue, MenuItem, etc.
+  entityId   String
+  oldValues  Json?
+  newValues  Json?
+  timestamp  DateTime @default(now())
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  venueId     String
+  venue       Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  studentName String   @default("Anonymous")
+  rating      Int      @default(5)
+  comment     String?
+  approved    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}

@@ -1,0 +1,149 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "CU Grab Eats API Documentation",
+    "version": "1.0.0",
+    "description": "Production-ready REST API for CU Grab Eats backend. Used by both Next.js Admin Dashboard and Flutter Mobile App."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api/v1",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Admin Login",
+        "description": "Authenticate admin user and return JWT token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Get authenticated admin profile",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Profile retrieved successfully" }
+        }
+      }
+    },
+    "/venues": {
+      "get": {
+        "summary": "Get all venues",
+        "description": "Browse list of all campus food outlets",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      },
+      "post": {
+        "summary": "Create new venue",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "201": { "description": "Created" }
+        }
+      }
+    },
+    "/venues/{id}": {
+      "get": {
+        "summary": "Get venue details by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      },
+      "put": {
+        "summary": "Update venue details",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Updated" }
+        }
+      },
+      "delete": {
+        "summary": "Soft delete venue",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Deleted" }
+        }
+      }
+    },
+    "/categories/venue/{venueId}": {
+      "get": {
+        "summary": "Get categories by venue ID",
+        "parameters": [{ "name": "venueId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/menu-items": {
+      "get": {
+        "summary": "Get menu items",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "venueId", "in": "query", "schema": { "type": "string" } },
+          { "name": "categoryId", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/mess-menu": {
+      "get": {
+        "summary": "Get weekly mess menu",
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/mess-menu/today": {
+      "get": {
+        "summary": "Get today's mess menu",
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/announcements": {
+      "get": {
+        "summary": "Get active announcements",
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    }
+  }
+}
