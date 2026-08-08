@@ -34,7 +34,7 @@ type PageKey = 'Dashboard' | 'Mess Menu' | 'Food Outlets' | 'Outlet Menus' | 'An
 // -------------------------------------------------------------
 // LOGIN COMPONENT
 // -------------------------------------------------------------
-function LoginForm({ onLoginSuccess }: { onLoginSuccess: (token: string, admin: any) => void }) {
+function LoginForm({ onLoginSuccess, onSwitchToStudent }: { onLoginSuccess: (token: string, admin: any) => void; onSwitchToStudent?: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -95,6 +95,11 @@ function LoginForm({ onLoginSuccess }: { onLoginSuccess: (token: string, admin: 
             <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white" disabled={loading}>
               {loading ? 'Authenticating...' : 'Sign In'}
             </Button>
+            {onSwitchToStudent && (
+              <Button type="button" variant="outline" className="w-full text-xs font-semibold" onClick={onSwitchToStudent}>
+                Back to Student Portal
+              </Button>
+            )}
             <p className="text-[11px] text-muted-foreground text-center mt-2">
               Protected by JWT encryption & security rate limiting
             </p>
@@ -128,6 +133,20 @@ function VenueWizard({ isOpen, onClose, onRefresh }: { isOpen: boolean; onClose:
       isClosed: false,
     }))
   )
+
+  useEffect(() => {
+    const handleMapMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'LOCATION_PICKED') {
+        setLatitude(event.data.latitude)
+        setLongitude(event.data.longitude)
+        setGoogleMapsLink(event.data.googleMapsLink)
+      }
+    }
+    window.addEventListener('message', handleMapMessage)
+    return () => {
+      window.removeEventListener('message', handleMapMessage)
+    }
+  }, [])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return
@@ -235,22 +254,36 @@ function VenueWizard({ isOpen, onClose, onRefresh }: { isOpen: boolean; onClose:
         {step === 2 && (
           <div className="space-y-4 py-2">
             <h3 className="text-sm font-semibold">Step 2: Location & Coordinates</h3>
+            
+            <div className="space-y-2">
+              <label className="text-xs font-medium">Pick Location on Google Map</label>
+              <div className="w-full h-80 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 shadow-inner">
+                <iframe
+                  src={`/map-picker.html?lat=${latitude || '30.7688'}&lng=${longitude || '76.5754'}`}
+                  className="w-full h-full border-none"
+                  title="Google Maps Location Picker"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-xs font-medium">Building/Location Name</label>
               <Input value={building} onChange={(e) => setBuilding(e.target.value)} placeholder="e.g. Student Centre First Floor" />
             </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-medium">Latitude</label>
+                <label className="text-xs font-medium">Latitude (Auto-filled)</label>
                 <Input type="number" step="any" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-medium">Longitude</label>
+                <label className="text-xs font-medium">Longitude (Auto-filled)</label>
                 <Input type="number" step="any" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
               </div>
             </div>
+            
             <div className="space-y-2">
-              <label className="text-xs font-medium">Google Maps Navigation Link</label>
+              <label className="text-xs font-medium">Google Maps Navigation Link (Auto-filled)</label>
               <Input value={googleMapsLink} onChange={(e) => setGoogleMapsLink(e.target.value)} placeholder="https://maps.app.goo.gl/..." />
             </div>
           </div>
@@ -359,8 +392,7 @@ function VenueWizard({ isOpen, onClose, onRefresh }: { isOpen: boolean; onClose:
 }
 
 // -------------------------------------------------------------
-// STANDALONE PAGES
-// -------------------------------------------------------------
+
 function AddMenuItemDialog({ isOpen, venue, onClose }: { isOpen: boolean; venue: any; onClose: () => void }) {
   const [categories, setCategories] = useState<any[]>([])
   const [categoryId, setCategoryId] = useState('')
@@ -371,6 +403,13 @@ function AddMenuItemDialog({ isOpen, venue, onClose }: { isOpen: boolean; venue:
   const [isVeg, setIsVeg] = useState(true)
   const [featured, setFeatured] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // New Category inline creation state
+  const [newCatName, setNewCatName] = useState('')
+  const [creatingCat, setCreatingCat] = useState(false)
+
+  // Item Queue for adding multiple items at once
+  const [itemQueue, setItemQueue] = useState<any[]>([])
 
   useEffect(() => {
     if (venue?.id) {
@@ -385,95 +424,240 @@ function AddMenuItemDialog({ isOpen, venue, onClose }: { isOpen: boolean; venue:
     }
   }, [venue])
 
+  const handleCreateCategory = async () => {
+    if (!newCatName.trim() || !venue?.id) return
+    setCreatingCat(true)
+    const res = await apiRequest(`/categories/venue/${venue.id}`, {
+      method: 'POST',
+      body: JSON.stringify({ name: newCatName.trim() }),
+    })
+    setCreatingCat(false)
+    if (res.success && res.data) {
+      toast.success('Category created successfully')
+      const createdCategory = res.data
+      setCategories([...categories, createdCategory])
+      setCategoryId(createdCategory.id)
+      setNewCatName('')
+    } else {
+      toast.error(res.message || 'Failed to create category')
+    }
+  }
+
+  const handleAddToQueue = () => {
+    if (!name.trim()) {
+      toast.error('Please enter a food item name')
+      return
+    }
+    if (!price || isNaN(parseFloat(price))) {
+      toast.error('Please enter a valid price')
+      return
+    }
+    if (!categoryId) {
+      toast.error('Please select or create a category first')
+      return
+    }
+
+    const newItem = {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      price: parseFloat(price),
+      categoryId,
+      preparationTime: parseInt(prepTime) || 15,
+      available: true,
+      featured,
+      tags: [isVeg ? 'Veg' : 'Non Veg'],
+      categoryName: categories.find((c) => c.id === categoryId)?.name || 'Category',
+    }
+
+    setItemQueue([...itemQueue, newItem])
+    
+    // Reset item inputs for the next entry
+    setName('')
+    setDescription('')
+    setPrice('')
+    setPrepTime('15')
+    setIsVeg(true)
+    setFeatured(false)
+    
+    toast.success('Added item to draft list!')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!categoryId) {
-      toast.error('Please select a category')
+
+    const finalItems = [...itemQueue]
+    
+    // If the fields are currently filled out, append it as the last item
+    if (name.trim() && price) {
+      finalItems.push({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        price: parseFloat(price),
+        categoryId,
+        preparationTime: parseInt(prepTime) || 15,
+        available: true,
+        featured,
+        tags: [isVeg ? 'Veg' : 'Non Veg'],
+      })
+    }
+
+    if (finalItems.length === 0) {
+      toast.error('Please add at least one item to the list')
       return
     }
 
     setLoading(true)
-    const payload = {
-      name,
-      description,
-      price: parseFloat(price),
-      categoryId,
-      preparationTime: parseInt(prepTime),
-      available: true,
-      featured,
-      tags: [isVeg ? 'Veg' : 'Non Veg'],
-    }
-
-    const res = await apiRequest('/menu-items', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
+    toast.loading(`Publishing ${finalItems.length} menu items...`, { id: 'bulk-publish' })
+    
+    const results = await Promise.all(
+      finalItems.map((item) =>
+        apiRequest('/menu-items', {
+          method: 'POST',
+          body: JSON.stringify(item),
+        })
+      )
+    )
+    
     setLoading(false)
+    toast.dismiss('bulk-publish')
 
-    if (res.success) {
-      toast.success('Menu item added successfully')
-      onClose()
+    const failed = results.filter((res) => !res.success)
+    if (failed.length > 0) {
+      toast.error(`Failed to publish ${failed.length} items.`)
     } else {
-      toast.error(res.message || 'Failed to add item')
+      toast.success(`Successfully published ${finalItems.length} items!`)
+      onClose()
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>Add Menu Item for {venue?.name}</DialogTitle>
-          <DialogDescription>Create a new food item inside this venue's categories.</DialogDescription>
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6">
+        <DialogHeader className="pb-3 border-b border-zinc-100 dark:border-zinc-800">
+          <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Add Menu Items for {venue?.name}</DialogTitle>
+          <DialogDescription className="text-xs text-zinc-500">Create new food items inside this venue's categories.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="space-y-2">
-            <label className="text-xs font-medium">Category</label>
+        
+        <form onSubmit={handleSubmit} className="space-y-5 pt-4">
+          {/* Category Section */}
+          <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 p-4 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Category Selection</h4>
+            
             {categories.length > 0 ? (
-              <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-zinc-400 uppercase">Select Existing</label>
+                <Select value={categoryId} onValueChange={setCategoryId}>
+                  <SelectTrigger className="h-9 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"><SelectValue placeholder="Choose category" /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             ) : (
-              <p className="text-xs text-rose-600 font-medium">
-                No categories found! Create a category first.
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                ⚠️ No categories exist yet. Create one below to add menu items.
               </p>
             )}
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-medium">Food Name</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Cheese Pizza" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-medium">Description</label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Loaded with fresh cheese..." />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-xs font-medium">Price (₹)</label>
-              <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required placeholder="150" />
+
+            {/* Quick Add Category inline form */}
+            <div className="pt-3 border-t border-dashed border-zinc-200 dark:border-zinc-800 mt-2">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">Or Add New Category</label>
+              <div className="flex gap-2">
+                <Input
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  placeholder="e.g. Beverages, Mains"
+                  className="h-8 text-xs flex-1 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
+                />
+                <Button
+                  type="button"
+                  onClick={handleCreateCategory}
+                  disabled={creatingCat || !newCatName.trim()}
+                  className="h-8 text-xs px-3 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 font-medium rounded-lg"
+                >
+                  {creatingCat ? 'Adding...' : 'Create'}
+                </Button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-medium">Prep Time (mins)</label>
-              <Input type="number" value={prepTime} onChange={(e) => setPrepTime(e.target.value)} required />
+          </div>
+
+          {/* Product Details Section */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Food Item Details</h4>
+            
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Food Name</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} required={itemQueue.length === 0} placeholder="e.g. Cheese Pizza" className="h-9 text-xs border-zinc-200 dark:border-zinc-800" />
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-zinc-500">Description</label>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Loaded with fresh cheese..." className="text-xs min-h-[70px] border-zinc-200 dark:border-zinc-800" />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-zinc-500">Price (₹)</label>
+                <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required={itemQueue.length === 0} placeholder="150" className="h-9 text-xs border-zinc-200 dark:border-zinc-800" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-zinc-500">Prep Time (mins)</label>
+                <Input type="number" value={prepTime} onChange={(e) => setPrepTime(e.target.value)} required={itemQueue.length === 0} className="h-9 text-xs border-zinc-200 dark:border-zinc-800" />
+              </div>
             </div>
           </div>
-          <div className="flex items-center justify-between border-t pt-4">
-            <label className="flex items-center gap-2 text-xs font-semibold">
+          
+          {/* Toggles */}
+          <div className="flex items-center justify-between border-t border-b py-3 my-2 border-zinc-100 dark:border-zinc-800">
+            <label className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 cursor-pointer">
               <Switch checked={isVeg} onCheckedChange={setIsVeg} />
               Vegetarian
             </label>
-            <label className="flex items-center gap-2 text-xs font-semibold">
+            <label className="flex items-center gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 cursor-pointer">
               <Switch checked={featured} onCheckedChange={setFeatured} />
               Featured Item
             </label>
           </div>
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={loading || !categoryId}>Add Item</Button>
+
+          {/* Item Draft Queue Listing */}
+          {itemQueue.length > 0 && (
+            <div className="space-y-2 bg-zinc-50 dark:bg-zinc-900/30 p-4 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50">
+              <h5 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Draft Items ({itemQueue.length})</h5>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {itemQueue.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center bg-white dark:bg-zinc-900 border p-2.5 rounded-lg text-xs">
+                    <div>
+                      <span className="font-semibold text-zinc-950 dark:text-zinc-50">{item.name}</span>
+                      <Badge variant="secondary" className="ml-2 text-[9px] py-0.5">{item.categoryName}</Badge>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold">₹{item.price}</span>
+                      <button
+                        type="button"
+                        onClick={() => setItemQueue(itemQueue.filter((_, i) => i !== idx))}
+                        className="text-rose-600 hover:text-rose-800 font-semibold"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="pt-2 flex flex-col sm:flex-row gap-2 justify-between items-center w-full">
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={onClose} className="h-9 text-xs border-zinc-200 dark:border-zinc-800 flex-1 sm:flex-initial">Cancel</Button>
+              <Button type="button" variant="secondary" onClick={handleAddToQueue} className="h-9 text-xs flex-1 sm:flex-initial border">
+                + Queue Item
+              </Button>
+            </div>
+            <Button type="submit" disabled={loading} className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold w-full sm:w-auto shrink-0">
+              {itemQueue.length > 0 ? `Publish All (${itemQueue.length + (name.trim() ? 1 : 0)})` : 'Add Item'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -569,10 +753,18 @@ function OutletsPage({ venues, onRefresh }: { venues: any[]; onRefresh: () => vo
 
 function MenuPage({ menuItems, venues, onRefresh }: { menuItems: any[]; venues: any[]; onRefresh: () => void }) {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [manageCatOpen, setManageCatOpen] = useState(false)
   const [selectVenueForMenu, setSelectVenueForMenu] = useState<any | null>(null)
 
   const itemsByOutlet = useMemo(() => {
     const groups: Record<string, any[]> = {}
+    // Pre-populate groups for all active venues to ensure they show up even with 0 items
+    venues.forEach((v) => {
+      if (!v.deletedAt) {
+        groups[v.name] = []
+      }
+    })
+    
     menuItems.forEach((item) => {
       const outletName = item.venue?.name || 'Other Outlets'
       if (!groups[outletName]) {
@@ -581,7 +773,7 @@ function MenuPage({ menuItems, venues, onRefresh }: { menuItems: any[]; venues: 
       groups[outletName].push(item)
     })
     return groups
-  }, [menuItems])
+  }, [menuItems, venues])
 
   return (
     <div className="flex flex-col gap-6">
@@ -601,6 +793,16 @@ function MenuPage({ menuItems, venues, onRefresh }: { menuItems: any[]; venues: 
                   <CardDescription className="text-xs">Menu list ({items.length} items)</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => {
+                    if (matchedVenue) {
+                      setSelectVenueForMenu(matchedVenue)
+                      setManageCatOpen(true)
+                    } else {
+                      toast.error('Could not find outlet metadata')
+                    }
+                  }} className="text-xs gap-1.5 h-8">
+                    <Plus className="size-3.5" /> Categories
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => {
                     if (matchedVenue) {
                       setSelectVenueForMenu(matchedVenue)
@@ -705,7 +907,119 @@ function MenuPage({ menuItems, venues, onRefresh }: { menuItems: any[]; venues: 
           }}
         />
       )}
+      {manageCatOpen && (
+        <ManageCategoriesDialog
+          isOpen={manageCatOpen}
+          venue={selectVenueForMenu}
+          onClose={() => {
+            setManageCatOpen(false)
+            setSelectVenueForMenu(null)
+            onRefresh()
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+function ManageCategoriesDialog({ isOpen, venue, onClose }: { isOpen: boolean; venue: any; onClose: () => void }) {
+  const [categories, setCategories] = useState<any[]>([])
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const fetchCategories = useCallback(async () => {
+    if (!venue?.id) return
+    const res = await apiRequest(`/categories/venue/${venue.id}`)
+    if (res.success && res.data) {
+      setCategories(res.data)
+    }
+  }, [venue])
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchCategories()
+    }
+  }, [isOpen, fetchCategories])
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCategoryName.trim()) return
+
+    setLoading(true)
+    const res = await apiRequest(`/categories/venue/${venue.id}`, {
+      method: 'POST',
+      body: JSON.stringify({ name: newCategoryName.trim() }),
+    })
+    setLoading(false)
+
+    if (res.success) {
+      toast.success('Category created successfully')
+      setNewCategoryName('')
+      fetchCategories()
+    } else {
+      toast.error(res.message || 'Failed to create category')
+    }
+  }
+
+  const handleDelete = async (catId: string) => {
+    if (!confirm('Are you sure you want to delete this category? All items in it will lose their category.')) return
+
+    toast.loading('Deleting category...', { id: 'del-cat' })
+    const res = await apiRequest(`/categories/${catId}`, {
+      method: 'DELETE',
+    })
+    toast.dismiss('del-cat')
+
+    if (res.success) {
+      toast.success('Category deleted')
+      fetchCategories()
+    } else {
+      toast.error(res.message || 'Failed to delete category')
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(val) => !val && onClose()}>
+      <DialogContent className="sm:max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle>Manage Categories for {venue?.name}</DialogTitle>
+          <DialogDescription>Create and delete food categories for this outlet.</DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleCreate} className="space-y-4 py-2">
+          <div className="flex gap-2">
+            <Input
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="New category name (e.g. Desserts)"
+              required
+              className="text-xs"
+            />
+            <Button type="submit" disabled={loading} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs shrink-0">
+              {loading ? 'Creating...' : 'Add'}
+            </Button>
+          </div>
+        </form>
+
+        <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+          <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Existing Categories</h4>
+          {categories.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic p-2 bg-zinc-50 dark:bg-zinc-950/20 rounded-lg">No categories created yet.</p>
+          ) : (
+            <div className="divide-y border rounded-xl overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/20">
+              {categories.map((cat) => (
+                <div key={cat.id} className="flex items-center justify-between p-3 text-xs">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{cat.name}</span>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(cat.id)} className="size-8 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600">
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1070,7 +1384,7 @@ function AuditLogsPage({ auditLogs }: { auditLogs: any[] }) {
 // -------------------------------------------------------------
 // MAIN DASHBOARD LAYOUT
 // -------------------------------------------------------------
-export default function DashboardApp() {
+export default function DashboardApp({ onSwitchToStudent }: { onSwitchToStudent?: () => void }) {
   const [token, setToken] = useState<string | null>(null)
   const [admin, setAdmin] = useState<any | null>(null)
   const [active, setActive] = useState<PageKey>('Dashboard')
@@ -1166,7 +1480,7 @@ export default function DashboardApp() {
   }
 
   if (!token) {
-    return <LoginForm onLoginSuccess={(t, a) => { setToken(t); setAdmin(a) }} />
+    return <LoginForm onLoginSuccess={(t, a) => { setToken(t); setAdmin(a) }} onSwitchToStudent={onSwitchToStudent} />
   }
 
   const renderDashboardHome = () => {
@@ -1361,6 +1675,11 @@ export default function DashboardApp() {
               </Breadcrumb>
 
               <div className="flex items-center gap-2">
+                {onSwitchToStudent && (
+                  <Button variant="outline" size="sm" onClick={onSwitchToStudent} className="text-xs font-semibold mr-2">
+                    Student View
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" onClick={() => setDark(!dark)}>
                   {dark ? <Sun className="size-4 text-zinc-400" /> : <Moon className="size-4 text-zinc-600" />}
                 </Button>
