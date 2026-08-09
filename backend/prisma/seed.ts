@@ -25,7 +25,8 @@ async function main() {
   console.log('Cleared existing records.');
 
   // 2. Seed Admin Users
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  const defaultPassword = process.env.SEED_ADMIN_PASSWORD || 'admin123';
+  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
   
   const superAdmin = await prisma.admin.create({
     data: {
