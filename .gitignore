@@ -17,3 +17,4 @@ node_modules
 # Backend ignores
 backend/.env
 backend/dist/
+DEVELOPER_NOTES.md
