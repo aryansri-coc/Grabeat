@@ -4,9 +4,9 @@
   "description": "Express.js REST API for CU Grab Eats",
   "main": "dist/app.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
-    "build": "tsc",
-    "start": "node dist/app.js",
+    "dev": "node init && ts-node-dev --respawn --transpile-only src/app.ts",
+    "build": "node init && tsc",
+    "start": "node init && node dist/app.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "ts-node prisma/seed.ts"
