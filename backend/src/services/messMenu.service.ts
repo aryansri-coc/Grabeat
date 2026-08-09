@@ -1,6 +1,7 @@
 import { MessMenuRepository } from '../repositories/messMenu.repository';
 import { AuditLogRepository } from '../repositories/auditLog.repository';
 import { Day, MealType } from '@prisma/client';
+import { AppError } from '../utils/errors';
 
 export class MessMenuService {
   static async getMessMenu() {
@@ -62,5 +63,12 @@ export class MessMenuService {
     }
 
     return duplicated;
+  }
+
+  static async rateMessMenuItem(id: string, rating: number) {
+    if (rating < 1 || rating > 5) {
+      throw new AppError('Rating must be between 1 and 5', 400);
+    }
+    return MessMenuRepository.rateItem(id, rating);
   }
 }

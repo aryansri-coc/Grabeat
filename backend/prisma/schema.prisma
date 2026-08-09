@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -158,19 +159,33 @@ model MenuItemTag {
 enum MealType {
   BREAKFAST
   LUNCH
-  SNACKS
+  SNACKS_BOYS
+  SNACKS_GIRLS
   DINNER
+  SOUTH_INDIAN
+  INTERNATIONAL
 }
 
 model MessMenu {
-  id        String   @id @default(uuid())
-  day       Day
-  mealType  MealType
-  dishName  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  day         Day
+  mealType    MealType
+  dishName    String
+  ratingSum   Float    @default(0)
+  ratingCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([day, mealType, dishName])
+}
+
+model MessTiming {
+  id          String   @id @default(uuid())
+  mealType    MealType @unique
+  openingTime String   @default("08:00")
+  closingTime String   @default("10:00")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 enum Priority {

@@ -113,26 +113,43 @@ function LoginForm({ onLoginSuccess, onSwitchToStudent }: { onLoginSuccess: (tok
 // -------------------------------------------------------------
 // WIZARD COMPONENT
 // -------------------------------------------------------------
-function VenueWizard({ isOpen, onClose, onRefresh }: { isOpen: boolean; onClose: () => void; onRefresh: () => void }) {
+function VenueWizard({ isOpen, onClose, onRefresh, venue }: { isOpen: boolean; onClose: () => void; onRefresh: () => void; venue?: any }) {
   const [step, setStep] = useState(1)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [building, setBuilding] = useState('')
-  const [phone, setPhone] = useState('')
-  const [latitude, setLatitude] = useState('30.7688')
-  const [longitude, setLongitude] = useState('76.5754')
-  const [googleMapsLink, setGoogleMapsLink] = useState('')
-  const [status, setStatus] = useState<any>('OPEN')
-  const [uploadedImages, setUploadedImages] = useState<any[]>([])
+  const [name, setName] = useState(venue?.name || '')
+  const [description, setDescription] = useState(venue?.description || '')
+  const [building, setBuilding] = useState(venue?.building || '')
+  const [phone, setPhone] = useState(venue?.phone || '')
+  const [latitude, setLatitude] = useState(venue?.latitude ? String(venue.latitude) : '30.7688')
+  const [longitude, setLongitude] = useState(venue?.longitude ? String(venue.longitude) : '76.5754')
+  const [googleMapsLink, setGoogleMapsLink] = useState(venue?.googleMapsLink || '')
+  const [status, setStatus] = useState<any>(venue?.status || 'OPEN')
+  const [uploadedImages, setUploadedImages] = useState<any[]>(venue?.images || [])
   
-  const [hours, setHours] = useState<any>(
-    ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map((day) => ({
+  const [hours, setHours] = useState<any>(() => {
+    if (venue?.operatingHours && venue.operatingHours.length > 0) {
+      const dayOrder = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']
+      return dayOrder.map((day) => {
+        const found = venue.operatingHours.find((h: any) => h.day === day)
+        return found ? {
+          day: found.day,
+          openingTime: found.openingTime,
+          closingTime: found.closingTime,
+          isClosed: found.isClosed,
+        } : {
+          day,
+          openingTime: '09:00',
+          closingTime: '22:00',
+          isClosed: false,
+        }
+      })
+    }
+    return ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map((day) => ({
       day,
       openingTime: '09:00',
       closingTime: '22:00',
       isClosed: false,
     }))
-  )
+  })
 
   useEffect(() => {
     const handleMapMessage = (event: MessageEvent) => {
@@ -189,23 +206,37 @@ function VenueWizard({ isOpen, onClose, onRefresh }: { isOpen: boolean; onClose:
       longitude: isNaN(lngNum) ? undefined : lngNum,
       googleMapsLink: googleMapsLink.trim() || undefined,
       status,
-      operatingHours: hours,
-      images: uploadedImages,
+      operatingHours: hours.map((oh: any) => ({
+        day: oh.day,
+        openingTime: oh.openingTime,
+        closingTime: oh.closingTime,
+        isClosed: oh.isClosed,
+      })),
+      images: uploadedImages.map((img: any) => ({
+        url: img.url,
+        publicId: img.publicId,
+        width: img.width || undefined,
+        height: img.height || undefined,
+        altText: img.altText || undefined,
+        displayOrder: img.displayOrder || 0,
+      })),
     }
 
-    toast.loading('Publishing venue to campus database...', { id: 'publishing' })
-    const venueRes = await apiRequest('/venues', {
-      method: 'POST',
+    toast.loading(venue ? 'Updating venue...' : 'Publishing venue to campus database...', { id: 'publishing' })
+    const url = venue ? `/venues/${venue.id}` : '/venues'
+    const method = venue ? 'PUT' : 'POST'
+    const venueRes = await apiRequest(url, {
+      method,
       body: JSON.stringify(venuePayload),
     })
     toast.dismiss('publishing')
 
     if (!venueRes.success || !venueRes.data) {
-      toast.error(venueRes.message || 'Failed to create venue')
+      toast.error(venueRes.message || 'Failed to save venue')
       return
     }
 
-    toast.success('Venue published successfully to campus map!')
+    toast.success(venue ? 'Venue updated successfully!' : 'Venue published successfully to campus map!')
     onClose()
     onRefresh()
   }
@@ -214,7 +245,7 @@ function VenueWizard({ isOpen, onClose, onRefresh }: { isOpen: boolean; onClose:
     <Dialog open={isOpen} onOpenChange={(val) => !val && onClose()}>
       <DialogContent className="sm:max-w-[650px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add food outlet wizard (Step {step}/5)</DialogTitle>
+          <DialogTitle>{venue ? 'Edit' : 'Add'} food outlet wizard (Step {step}/5)</DialogTitle>
           <DialogDescription>Setup outlet details, custom schedule, and images.</DialogDescription>
         </DialogHeader>
 
@@ -383,7 +414,7 @@ function VenueWizard({ isOpen, onClose, onRefresh }: { isOpen: boolean; onClose:
           {step < 5 ? (
             <Button onClick={() => setStep(step + 1)} disabled={step === 1 && !name.trim()}>Next</Button>
           ) : (
-            <Button onClick={handlePublish} className="bg-indigo-600 text-white hover:bg-indigo-700">Publish Outlet</Button>
+            <Button onClick={handlePublish} className="bg-indigo-600 text-white hover:bg-indigo-700">{venue ? 'Save' : 'Publish'} Outlet</Button>
           )}
         </DialogFooter>
       </DialogContent>
@@ -546,7 +577,7 @@ function AddMenuItemDialog({ isOpen, venue, onClose }: { isOpen: boolean; venue:
             {categories.length > 0 ? (
               <div className="space-y-1">
                 <label className="text-[10px] font-semibold text-zinc-400 uppercase">Select Existing</label>
-                <Select value={categoryId} onValueChange={setCategoryId}>
+                <Select value={categoryId} onValueChange={(val) => setCategoryId(val || '')}>
                   <SelectTrigger className="h-9 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"><SelectValue placeholder="Choose category" /></SelectTrigger>
                   <SelectContent>
                     {categories.map((cat) => (
@@ -667,6 +698,7 @@ function AddMenuItemDialog({ isOpen, venue, onClose }: { isOpen: boolean; venue:
 
 function OutletsPage({ venues, onRefresh }: { venues: any[]; onRefresh: () => void }) {
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [editVenue, setEditVenue] = useState<any | null>(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [selectVenueForMenu, setSelectVenueForMenu] = useState<any | null>(null)
 
@@ -677,7 +709,7 @@ function OutletsPage({ venues, onRefresh }: { venues: any[]; onRefresh: () => vo
           <h1 className="text-2xl font-semibold tracking-tight">Food Outlets</h1>
           <p className="text-sm text-muted-foreground">Manage all campus cafeteria locations, operational status, and active schedules.</p>
         </div>
-        <Button onClick={() => setWizardOpen(true)} className="bg-indigo-600 text-white hover:bg-indigo-700 gap-2">
+        <Button onClick={() => { setEditVenue(null); setWizardOpen(true); }} className="bg-indigo-600 text-white hover:bg-indigo-700 gap-2">
           <Plus className="size-4" /> Add Outlet
         </Button>
       </div>
@@ -716,6 +748,12 @@ function OutletsPage({ venues, onRefresh }: { venues: any[]; onRefresh: () => vo
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => {
+                            setEditVenue(venue)
+                            setWizardOpen(true)
+                          }}>
+                            <Edit3 className="size-3.5 mr-2" /> Edit Outlet
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
                             setSelectVenueForMenu(venue)
                             setAddMenuOpen(true)
                           }}>
@@ -726,10 +764,10 @@ function OutletsPage({ venues, onRefresh }: { venues: any[]; onRefresh: () => vo
                             const res = await apiRequest(`/venues/${venue.id}`, { method: 'DELETE' })
                             toast.dismiss('delete')
                             if (res.success) {
-                              toast.success('Venue soft deleted successfully')
-                              onRefresh()
+                                toast.success('Venue soft deleted successfully')
+                                onRefresh()
                             } else {
-                              toast.error('Failed to delete')
+                                toast.error('Failed to delete')
                             }
                           }} className="text-destructive">
                             <Trash2 className="size-3.5 mr-2" /> Soft Delete
@@ -745,7 +783,17 @@ function OutletsPage({ venues, onRefresh }: { venues: any[]; onRefresh: () => vo
         </CardContent>
       </Card>
 
-      {wizardOpen && <VenueWizard isOpen={wizardOpen} onClose={() => setWizardOpen(false)} onRefresh={onRefresh} />}
+      {wizardOpen && (
+        <VenueWizard
+          isOpen={wizardOpen}
+          venue={editVenue}
+          onClose={() => {
+            setWizardOpen(false)
+            setEditVenue(null)
+          }}
+          onRefresh={onRefresh}
+        />
+      )}
       {addMenuOpen && <AddMenuItemDialog isOpen={addMenuOpen} venue={selectVenueForMenu} onClose={() => { setAddMenuOpen(false); setSelectVenueForMenu(null); onRefresh(); }} />}
     </div>
   )
@@ -1027,9 +1075,20 @@ function MessMenuPage({ onRefresh }: { onRefresh: () => void }) {
   const [day, setDay] = useState<any>('MONDAY')
   const [breakfast, setBreakfast] = useState('')
   const [lunch, setLunch] = useState('')
-  const [snacks, setSnacks] = useState('')
+  const [snacksBoys, setSnacksBoys] = useState('')
+  const [snacksGirls, setSnacksGirls] = useState('')
   const [dinner, setDinner] = useState('')
+  const [southIndian, setSouthIndian] = useState('')
+  const [international, setInternational] = useState('')
   const [weeklyMenu, setWeeklyMenu] = useState<any[]>([])
+  const [timings, setTimings] = useState<any[]>([])
+
+  const fetchTimings = useCallback(async () => {
+    const res = await apiRequest('/mess-menu/timings')
+    if (res.success && res.data) {
+      setTimings(res.data)
+    }
+  }, [])
 
   const fetchMenuData = useCallback(async () => {
     const res = await apiRequest('/mess-menu')
@@ -1040,22 +1099,29 @@ function MessMenuPage({ onRefresh }: { onRefresh: () => void }) {
       const dayMeals = res.data.filter((item: any) => item.day === day)
       setBreakfast(dayMeals.find((m: any) => m.mealType === 'BREAKFAST')?.dishName || '')
       setLunch(dayMeals.find((m: any) => m.mealType === 'LUNCH')?.dishName || '')
-      setSnacks(dayMeals.find((m: any) => m.mealType === 'SNACKS')?.dishName || '')
+      setSnacksBoys(dayMeals.find((m: any) => m.mealType === 'SNACKS_BOYS')?.dishName || '')
+      setSnacksGirls(dayMeals.find((m: any) => m.mealType === 'SNACKS_GIRLS')?.dishName || '')
       setDinner(dayMeals.find((m: any) => m.mealType === 'DINNER')?.dishName || '')
+      setSouthIndian(dayMeals.find((m: any) => m.mealType === 'SOUTH_INDIAN')?.dishName || '')
+      setInternational(dayMeals.find((m: any) => m.mealType === 'INTERNATIONAL')?.dishName || '')
     }
   }, [day])
 
   useEffect(() => {
     fetchMenuData()
-  }, [day, fetchMenuData])
+    fetchTimings()
+  }, [day, fetchMenuData, fetchTimings])
 
   const handleSave = async () => {
     const mealsPayload = [
       { mealType: 'BREAKFAST', dishName: breakfast },
       { mealType: 'LUNCH', dishName: lunch },
-      { mealType: 'SNACKS', dishName: snacks },
+      { mealType: 'SNACKS_BOYS', dishName: snacksBoys },
+      { mealType: 'SNACKS_GIRLS', dishName: snacksGirls },
       { mealType: 'DINNER', dishName: dinner },
-    ]
+      { mealType: 'SOUTH_INDIAN', dishName: southIndian },
+      { mealType: 'INTERNATIONAL', dishName: international },
+    ].filter(m => m.dishName.trim().length > 0)
 
     toast.loading('Saving mess menu...', { id: 'save' })
     const res = await apiRequest(`/mess-menu/day/${day}`, {
@@ -1078,6 +1144,21 @@ function MessMenuPage({ onRefresh }: { onRefresh: () => void }) {
     return weeklyMenu.find((m) => m.day === targetDay && m.mealType === type)?.dishName || 'Not Set'
   }
 
+  const getMealTimingStr = (mealType: string) => {
+    const t = timings.find((tm) => tm.mealType === mealType)
+    if (!t) return ''
+    
+    const formatTime = (timeStr: string) => {
+      const [hStr, mStr] = timeStr.split(':')
+      const h = parseInt(hStr)
+      const ampm = h >= 12 ? 'PM' : 'AM'
+      const hour = h % 12 === 0 ? 12 : h % 12
+      return `${hour}:${mStr} ${ampm}`
+    }
+
+    return ` (${formatTime(t.openingTime)} - ${formatTime(t.closingTime)})`
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -1098,25 +1179,37 @@ function MessMenuPage({ onRefresh }: { onRefresh: () => void }) {
           <Card className="border-zinc-200/80 shadow-sm dark:border-zinc-800">
             <CardHeader>
               <CardTitle className="text-sm">Manage Meals for {day}</CardTitle>
-              <CardDescription>Setup details for Breakfast, Lunch, Tea Snacks, and Dinner.</CardDescription>
+              <CardDescription>Setup details for Breakfast, Lunch, Snacks, Dinner, South Indian, and International Mess.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold">Breakfast (7:30 AM - 9:30 AM)</label>
+                  <label className="text-xs font-semibold">Breakfast{getMealTimingStr('BREAKFAST')}</label>
                   <Input value={breakfast} onChange={(e) => setBreakfast(e.target.value)} placeholder="e.g. Paratha with Curd" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold">Lunch (12:30 PM - 2:30 PM)</label>
+                  <label className="text-xs font-semibold">Lunch{getMealTimingStr('LUNCH')}</label>
                   <Input value={lunch} onChange={(e) => setLunch(e.target.value)} placeholder="e.g. Rajma Chawal, Roti, Salad" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold">Snacks (4:30 PM - 6:00 PM)</label>
-                  <Input value={snacks} onChange={(e) => setSnacks(e.target.value)} placeholder="e.g. Samosa and Tea" />
+                  <label className="text-xs font-semibold">Snacks - Boys Hostel{getMealTimingStr('SNACKS_BOYS')}</label>
+                  <Input value={snacksBoys} onChange={(e) => setSnacksBoys(e.target.value)} placeholder="e.g. Samosa and Tea" />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold">Dinner (7:30 PM - 9:30 PM)</label>
+                  <label className="text-xs font-semibold">Snacks - Girls Hostel{getMealTimingStr('SNACKS_GIRLS')}</label>
+                  <Input value={snacksGirls} onChange={(e) => setSnacksGirls(e.target.value)} placeholder="e.g. Sandwich and Coffee" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold">Dinner{getMealTimingStr('DINNER')}</label>
                   <Input value={dinner} onChange={(e) => setDinner(e.target.value)} placeholder="e.g. Shahi Paneer, Dal Makhani" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold">South Indian Mess{getMealTimingStr('SOUTH_INDIAN')}</label>
+                  <Input value={southIndian} onChange={(e) => setSouthIndian(e.target.value)} placeholder="e.g. Idli Vada / Masala Dosa" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold">International Mess{getMealTimingStr('INTERNATIONAL')}</label>
+                  <Input value={international} onChange={(e) => setInternational(e.target.value)} placeholder="e.g. Pasta, Garlic Bread" />
                 </div>
               </div>
               <div className="flex gap-2 justify-end pt-4">
@@ -1143,6 +1236,70 @@ function MessMenuPage({ onRefresh }: { onRefresh: () => void }) {
         </TabsContent>
       </Tabs>
 
+      {/* Adjust Mess Hours Card */}
+      <Card className="border-zinc-200/80 shadow-sm dark:border-zinc-800">
+        <CardHeader>
+          <CardTitle className="text-base font-bold">Adjust Mess & Meal Hours</CardTitle>
+          <CardDescription>Configure operating hours for each hostel mess and meal service.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {timings.map((t) => (
+              <div key={t.mealType} className="p-3 bg-zinc-50 dark:bg-zinc-900 border rounded-xl flex flex-col justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold uppercase text-zinc-500 dark:text-zinc-400">
+                    {t.mealType.replace('_', ' ')}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      type="time"
+                      value={t.openingTime}
+                      onChange={(e) => {
+                        setTimings(timings.map(item => item.mealType === t.mealType ? { ...item, openingTime: e.target.value } : item))
+                      }}
+                      className="h-8 text-xs"
+                    />
+                    <span className="text-xs text-zinc-400">to</span>
+                    <Input
+                      type="time"
+                      value={t.closingTime}
+                      onChange={(e) => {
+                        setTimings(timings.map(item => item.mealType === t.mealType ? { ...item, closingTime: e.target.value } : item))
+                      }}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full text-xs font-medium h-8 bg-zinc-800 hover:bg-zinc-700 text-white dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                  onClick={async () => {
+                    toast.loading('Saving timings...', { id: 'save-timings' })
+                    const res = await apiRequest('/mess-menu/timings', {
+                      method: 'PUT',
+                      body: JSON.stringify({
+                        mealType: t.mealType,
+                        openingTime: t.openingTime,
+                        closingTime: t.closingTime,
+                      }),
+                    })
+                    toast.dismiss('save-timings')
+                    if (res.success) {
+                      toast.success('Hours updated successfully')
+                      fetchTimings()
+                    } else {
+                      toast.error('Failed to update hours')
+                    }
+                  }}
+                >
+                  Save Hours
+                </Button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Weekly Preview Section */}
       <Card className="border-zinc-200/80 shadow-sm dark:border-zinc-800">
         <CardHeader>
@@ -1154,11 +1311,14 @@ function MessMenuPage({ onRefresh }: { onRefresh: () => void }) {
             <Table>
               <TableHeader>
                 <TableRow className="bg-zinc-50 dark:bg-zinc-900">
-                  <TableHead className="w-[120px] font-bold">Day</TableHead>
+                  <TableHead className="w-[100px] font-bold">Day</TableHead>
                   <TableHead className="font-bold">Breakfast</TableHead>
                   <TableHead className="font-bold">Lunch</TableHead>
-                  <TableHead className="font-bold">Snacks</TableHead>
+                  <TableHead className="font-bold">Snacks (Boys)</TableHead>
+                  <TableHead className="font-bold">Snacks (Girls)</TableHead>
                   <TableHead className="font-bold">Dinner</TableHead>
+                  <TableHead className="font-bold">South Indian</TableHead>
+                  <TableHead className="font-bold">International</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1167,8 +1327,11 @@ function MessMenuPage({ onRefresh }: { onRefresh: () => void }) {
                     <TableCell className="font-bold text-xs uppercase">{d.slice(0, 3)}</TableCell>
                     <TableCell className="text-xs text-zinc-700 dark:text-zinc-300">{getMealDish(d, 'BREAKFAST')}</TableCell>
                     <TableCell className="text-xs text-zinc-700 dark:text-zinc-300">{getMealDish(d, 'LUNCH')}</TableCell>
-                    <TableCell className="text-xs text-zinc-700 dark:text-zinc-300">{getMealDish(d, 'SNACKS')}</TableCell>
+                    <TableCell className="text-xs text-zinc-700 dark:text-zinc-300">{getMealDish(d, 'SNACKS_BOYS')}</TableCell>
+                    <TableCell className="text-xs text-zinc-700 dark:text-zinc-300">{getMealDish(d, 'SNACKS_GIRLS')}</TableCell>
                     <TableCell className="text-xs text-zinc-700 dark:text-zinc-300">{getMealDish(d, 'DINNER')}</TableCell>
+                    <TableCell className="text-xs text-zinc-700 dark:text-zinc-300">{getMealDish(d, 'SOUTH_INDIAN')}</TableCell>
+                    <TableCell className="text-xs text-zinc-700 dark:text-zinc-300">{getMealDish(d, 'INTERNATIONAL')}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1497,89 +1660,103 @@ export default function DashboardApp({ onSwitchToStudent }: { onSwitchToStudent?
           {dashboardCards.map((card, idx) => {
             const Icon = card.icon
             return (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} key={card.label}>
-                <Card className="border-zinc-200/80 shadow-sm dark:border-zinc-800">
+              <div key={card.label}>
+                <Card className="border border-zinc-200 dark:border-zinc-800 shadow-none rounded-xl bg-white dark:bg-zinc-900 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700">
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between">
-                      <div className={`flex size-9 items-center justify-center rounded-xl ${
-                        card.tone === 'indigo' ? 'bg-indigo-500/10 text-indigo-600' :
-                        card.tone === 'emerald' ? 'bg-emerald-500/10 text-emerald-600' :
-                        card.tone === 'amber' ? 'bg-amber-500/10 text-amber-600' : 'bg-rose-500/10 text-rose-600'
+                      <div className={`flex size-9 items-center justify-center rounded-lg ${
+                        card.tone === 'indigo' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400' :
+                        card.tone === 'emerald' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' :
+                        card.tone === 'amber' ? 'bg-amber-100 text-amber-750 dark:bg-amber-950/60 dark:text-amber-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
                       }`}>
                         <Icon className="size-[18px]" />
                       </div>
-                      <Badge variant="secondary" className="rounded-md bg-zinc-100 px-1.5 text-[10px] text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                      <Badge variant="secondary" className="rounded-md bg-zinc-100 border border-zinc-200/50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-zinc-500 dark:bg-zinc-800 dark:border-zinc-750 dark:text-zinc-400 shadow-none">
                         {card.trend}
                       </Badge>
                     </div>
                     <div className="mt-4">
-                      <p className="text-2xl font-semibold tracking-tight">{card.value}</p>
-                      <p className="mt-1 text-xs font-medium text-muted-foreground">{card.label}</p>
+                      <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">{card.value}</p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{card.label}</p>
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </div>
             )
           })}
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
-          <Card className="border-zinc-200/80 shadow-sm dark:border-zinc-800">
-            <CardHeader>
-              <CardTitle className="text-sm">CU Grab Eats Operations</CardTitle>
-              <CardDescription>Live operations metrics and recently active outlets.</CardDescription>
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
+          <Card className="border border-zinc-200 dark:border-zinc-800 shadow-none rounded-xl bg-white dark:bg-zinc-900">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-sm font-bold tracking-tight text-zinc-900 dark:text-white">CU Grab Eats Operations</CardTitle>
+              <CardDescription className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">Live operations metrics and recently active outlets.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col gap-4">
-                <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4 border border-zinc-100 dark:border-zinc-800">
-                  <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Most recently updated venue</h4>
-                  {stats.mostRecentlyUpdatedVenue ? (
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-sm font-semibold text-indigo-600">{stats.mostRecentlyUpdatedVenue.name}</span>
-                      <span className="text-xs text-muted-foreground">Updated at {new Date(stats.mostRecentlyUpdatedVenue.updatedAt).toLocaleDateString()}</span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground mt-2">No venues updated recently.</p>
+                <div className="rounded-lg bg-zinc-55 dark:bg-zinc-950 p-4 border border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Most recently updated venue</h4>
+                    {stats.mostRecentlyUpdatedVenue ? (
+                      <p className="mt-1 text-sm font-bold text-zinc-850 dark:text-white">{stats.mostRecentlyUpdatedVenue.name}</p>
+                    ) : (
+                      <p className="text-xs text-zinc-450 mt-1">No venues updated recently.</p>
+                    )}
+                  </div>
+                  {stats.mostRecentlyUpdatedVenue && (
+                    <span className="text-xs font-semibold text-zinc-500 bg-zinc-200/40 px-2 py-0.5 rounded border border-zinc-200/50 dark:bg-zinc-800/40 dark:text-zinc-400 dark:border-zinc-700/50">
+                      {new Date(stats.mostRecentlyUpdatedVenue.updatedAt).toLocaleDateString()}
+                    </span>
                   )}
                 </div>
 
-                <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4 border border-zinc-100 dark:border-zinc-800">
-                  <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Soft deleted records in storage</h4>
-                  <div className="mt-2 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-rose-600">{stats.deletedRecords?.total || 0} Deleted Items</span>
-                    <Button variant="ghost" size="sm" onClick={() => setActive('Trash')} className="text-xs text-indigo-600 p-0 hover:bg-transparent">
-                      Restore / Manage Trash →
-                    </Button>
+                <div className="rounded-lg bg-zinc-55 dark:bg-zinc-950 p-4 border border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Soft deleted records in storage</h4>
+                    <p className="mt-1 text-sm font-black text-rose-600 dark:text-rose-455">{stats.deletedRecords?.total || 0} Archived Records</p>
                   </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setActive('Trash')} 
+                    className="text-xs font-bold text-indigo-650 hover:text-indigo-750 dark:text-indigo-400 dark:hover:text-indigo-350 p-2 hover:bg-zinc-200/40 dark:hover:bg-zinc-800/40 rounded-lg"
+                  >
+                    Manage Trash →
+                  </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-zinc-200/80 shadow-sm dark:border-zinc-800">
+          <Card className="border border-zinc-200 dark:border-zinc-800 shadow-none rounded-xl bg-white dark:bg-zinc-900">
             <CardHeader className="flex-row items-center justify-between pb-4">
               <div>
-                <CardTitle className="text-sm">Audit trail</CardTitle>
-                <CardDescription className="text-xs">Real-time moderator action logging</CardDescription>
+                <CardTitle className="text-sm font-bold tracking-tight text-zinc-900 dark:text-white">Audit trail</CardTitle>
+                <CardDescription className="text-xs text-zinc-400 dark:text-zinc-500 font-medium">Real-time moderator action logging</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setActive('Audit Logs')} className="text-xs text-indigo-600">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setActive('Audit Logs')} 
+                className="text-xs font-bold text-indigo-650 hover:text-indigo-750 dark:text-indigo-400 dark:hover:text-indigo-350 p-2 hover:bg-zinc-200/40 dark:hover:bg-zinc-800/40 rounded-lg"
+              >
                 View logs
               </Button>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="flex flex-col gap-3">
                 {auditLogs.slice(0, 5).map((log) => (
-                  <div key={log.id} className="flex gap-3 py-2 border-b last:border-b-0 border-zinc-100 dark:border-zinc-900">
-                    <div className="flex size-7 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
-                      {log.action.substring(0, 3)}
+                  <div key={log.id} className="flex gap-3 py-2 border-b last:border-b-0 border-zinc-200 dark:border-zinc-800/80 items-center">
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded bg-zinc-100 dark:bg-zinc-800 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 border border-zinc-200/30 dark:border-zinc-700/30">
+                      {log.action.substring(0, 3).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                      <p className="text-xs font-bold text-zinc-750 dark:text-zinc-200">
                         {log.action} {log.entity}
                       </p>
-                      <p className="text-[10px] text-muted-foreground truncate">{log.adminEmail || 'System Action'}</p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-550 truncate mt-0.5">{log.adminEmail || 'System Action'}</p>
                     </div>
-                    <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                    <span className="text-[9px] font-bold text-zinc-450 dark:text-zinc-500 whitespace-nowrap bg-zinc-50 dark:bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-800">
                       {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -1615,80 +1792,110 @@ export default function DashboardApp({ onSwitchToStudent }: { onSwitchToStudent?
   return (
     <TooltipProvider>
       <div className={dark ? 'dark' : ''}>
-        <div className="flex min-h-screen bg-background text-foreground">
-          <aside className={`hidden shrink-0 border-r bg-zinc-50 dark:bg-zinc-950 transition-[width] duration-300 lg:flex lg:flex-col ${collapsed ? 'w-[76px]' : 'w-[248px]'}`}>
-            <div className="flex h-16 items-center px-4 gap-2">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-indigo-600 text-white">
-                <Utensils className="size-4" />
+        <div className="flex min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-150 font-sans">
+          {/* Minimalist Flat Sidebar */}
+          <aside className={`hidden shrink-0 border-r border-zinc-200 dark:border-zinc-850 bg-zinc-50 dark:bg-zinc-900 transition-[width] duration-300 lg:flex lg:flex-col ${collapsed ? 'w-[76px]' : 'w-[250px]'}`}>
+            <div className="flex h-16 items-center px-5 gap-3">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-sm">
+                <Utensils className="size-4.5" />
               </div>
               {!collapsed && (
                 <div>
-                  <p className="text-sm font-semibold tracking-tight">CU Grab Eat</p>
-                  <p className="text-[10px] text-muted-foreground">Admin Workspace</p>
+                  <p className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-white">CU Grab Eat</p>
+                  <p className="text-[9px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-widest">Admin Panel</p>
                 </div>
               )}
             </div>
-            <Separator />
+            <Separator className="bg-zinc-200 dark:bg-zinc-800" />
+            
             <div className="flex flex-1 flex-col gap-1 p-3">
-              {sidebarNavItems.map(({ label, icon: Icon }) => (
-                <button
-                  key={label}
-                  onClick={() => setActive(label as PageKey)}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
-                    active === label ? 'bg-indigo-500/10 font-semibold text-indigo-600' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900'
-                  } ${collapsed ? 'justify-center' : ''}`}
-                >
-                  <Icon className="size-[18px]" />
-                  {!collapsed && <span>{label}</span>}
-                </button>
-              ))}
+              {sidebarNavItems.map(({ label, icon: Icon }) => {
+                const isActive = active === label
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setActive(label as PageKey)}
+                    className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-wide transition-all ${
+                      isActive 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/50 dark:text-zinc-400 dark:hover:text-white dark:hover:bg-zinc-800/50'
+                    } ${collapsed ? 'justify-center' : ''}`}
+                  >
+                    <Icon className="size-[16px]" />
+                    {!collapsed && <span>{label}</span>}
+                  </button>
+                )
+              })}
             </div>
+            
+            <Separator className="bg-zinc-200 dark:bg-zinc-800" />
             <div className="p-3 space-y-3">
-              <Button onClick={handleLogout} variant="ghost" className="w-full justify-start text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20">
+              <Button 
+                onClick={handleLogout} 
+                variant="ghost" 
+                className="w-full justify-start text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:text-rose-300 dark:hover:bg-rose-950/20 text-xs font-bold rounded-xl"
+              >
                 <LogOut className="size-4 mr-2" />
                 {!collapsed && 'Sign Out'}
               </Button>
-              <div className="flex items-center gap-3 bg-zinc-100 dark:bg-zinc-900 p-2.5 rounded-xl">
-                <Avatar className="size-8">
-                  <AvatarFallback className="bg-indigo-100 text-xs font-semibold text-indigo-700">
+              
+              <div className="flex items-center gap-3 bg-zinc-200/40 dark:bg-zinc-800/40 p-2.5 rounded-xl border border-zinc-200/30 dark:border-zinc-800/30">
+                <Avatar className="size-8 rounded-lg">
+                  <AvatarFallback className="bg-indigo-100 text-xs font-bold text-indigo-700 rounded-lg dark:bg-indigo-900 dark:text-white">
                     {admin?.name?.substring(0, 2).toUpperCase() || 'AD'}
                   </AvatarFallback>
                 </Avatar>
                 {!collapsed && (
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-medium">{admin?.name}</p>
-                    <p className="truncate text-[10px] text-muted-foreground">{admin?.role}</p>
+                    <p className="truncate text-xs font-bold text-zinc-800 dark:text-white">{admin?.name}</p>
+                    <p className="truncate text-[9px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-widest">{admin?.role}</p>
                   </div>
                 )}
               </div>
             </div>
           </aside>
 
+          {/* Main Flat Layout Area */}
           <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-background/95 px-4 md:px-7 backdrop-blur-sm">
+            <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-zinc-200 dark:border-zinc-850 bg-white dark:bg-zinc-950 px-4 md:px-7">
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>
-                    <BreadcrumbPage className="text-sm font-semibold">{active}</BreadcrumbPage>
+                    <BreadcrumbPage className="text-xs font-extrabold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{active}</BreadcrumbPage>
                   </BreadcrumbItem>
                 </BreadcrumbList>
               </Breadcrumb>
 
               <div className="flex items-center gap-2">
                 {onSwitchToStudent && (
-                  <Button variant="outline" size="sm" onClick={onSwitchToStudent} className="text-xs font-semibold mr-2">
-                    Student View
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={onSwitchToStudent} 
+                    className="text-xs font-bold text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-900 rounded-lg"
+                  >
+                    Student Portal
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" onClick={() => setDark(!dark)}>
-                  {dark ? <Sun className="size-4 text-zinc-400" /> : <Moon className="size-4 text-zinc-600" />}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setDark(!dark)}
+                  className="rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                >
+                  {dark ? <Sun className="size-4 text-zinc-400" /> : <Moon className="size-4 text-zinc-650" />}
                 </Button>
               </div>
             </header>
 
-            <main className="flex-1 p-4 md:p-7 overflow-y-auto">
+            <main className="flex-1 p-5 md:p-8 overflow-y-auto bg-zinc-50/50 dark:bg-zinc-900/10">
               <AnimatePresence mode="wait">
-                <motion.div key={active} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }}>
+                <motion.div 
+                  key={active} 
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }} 
+                  transition={{ duration: 0.1 }}
+                >
                   {content}
                 </motion.div>
               </AnimatePresence>

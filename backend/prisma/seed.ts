@@ -18,6 +18,7 @@ async function main() {
   await prisma.venueImage.deleteMany({});
   await prisma.venue.deleteMany({});
   await prisma.messMenu.deleteMany({});
+  await prisma.messTiming.deleteMany({});
   await prisma.announcement.deleteMany({});
   await prisma.admin.deleteMany({});
 
@@ -309,10 +310,13 @@ async function main() {
 
   // 5. Seed Mess Menu (Weekly)
   const mealsList = [
-    { mealType: MealType.BREAKFAST, dishName: 'Aloo Paratha with Curd & Tea' },
-    { mealType: MealType.LUNCH, dishName: 'Rajma, Rice, Roti, Salad & Boondi Raita' },
-    { mealType: MealType.SNACKS, dishName: 'Samosa with Sweet Chutney & Tea' },
-    { mealType: MealType.DINNER, dishName: 'Shahi Paneer, Dal Makhani, Roti, Kheer' },
+    { mealType: MealType.BREAKFAST, dishName: 'Aloo Paratha with Curd & Tea', ratingSum: 18, ratingCount: 4 },
+    { mealType: MealType.LUNCH, dishName: 'Rajma, Rice, Roti, Salad & Boondi Raita', ratingSum: 23, ratingCount: 5 },
+    { mealType: MealType.SNACKS_BOYS, dishName: 'Samosa with Sweet Chutney & Tea', ratingSum: 12, ratingCount: 3 },
+    { mealType: MealType.SNACKS_GIRLS, dishName: 'Samosa with Sweet Chutney & Tea', ratingSum: 14, ratingCount: 3 },
+    { mealType: MealType.DINNER, dishName: 'Shahi Paneer, Dal Makhani, Roti, Kheer', ratingSum: 28, ratingCount: 6 },
+    { mealType: MealType.SOUTH_INDIAN, dishName: 'Masala Dosa, Sambar & Coconut Chutney', ratingSum: 20, ratingCount: 4 },
+    { mealType: MealType.INTERNATIONAL, dishName: 'Pasta Primavera, Garlic Bread & Alfredo Sauce', ratingSum: 25, ratingCount: 5 },
   ];
 
   for (const day of Object.values(Day)) {
@@ -321,11 +325,30 @@ async function main() {
         day,
         mealType: meal.mealType,
         dishName: `${meal.dishName} (${day.substring(0, 3)})`,
+        ratingSum: meal.ratingSum,
+        ratingCount: meal.ratingCount,
       }))
     });
   }
 
-  console.log('Created Mess Menu.');
+  // Seed default Mess Timings
+  const defaultTimings = [
+    { mealType: MealType.BREAKFAST, openingTime: '08:00', closingTime: '10:00' },
+    { mealType: MealType.LUNCH, openingTime: '12:30', closingTime: '14:30' },
+    { mealType: MealType.SNACKS_BOYS, openingTime: '16:30', closingTime: '18:00' },
+    { mealType: MealType.SNACKS_GIRLS, openingTime: '16:30', closingTime: '18:00' },
+    { mealType: MealType.DINNER, openingTime: '19:30', closingTime: '21:30' },
+    { mealType: MealType.SOUTH_INDIAN, openingTime: '12:00', closingTime: '21:00' },
+    { mealType: MealType.INTERNATIONAL, openingTime: '11:00', closingTime: '22:00' },
+  ];
+
+  for (const t of defaultTimings) {
+    await prisma.messTiming.create({
+      data: t
+    });
+  }
+
+  console.log('Created Mess Menu and Mess Timings.');
 
   // 6. Seed Announcements
   await prisma.announcement.create({

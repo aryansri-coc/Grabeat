@@ -19,8 +19,11 @@ interface StudentPortalProps {
 }
 
 export default function StudentPortal({ onSwitchToAdmin }: StudentPortalProps) {
+  const [activeTab, setActiveTab] = useState<'OUTLETS' | 'MESS_MENU'>('OUTLETS')
   const [venues, setVenues] = useState<any[]>([])
   const [announcements, setAnnouncements] = useState<any[]>([])
+  const [weeklyMessMenu, setWeeklyMessMenu] = useState<any[]>([])
+  const [messTimings, setMessTimings] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBuilding, setSelectedBuilding] = useState('ALL')
   const [selectedStatus, setSelectedStatus] = useState('ALL')
@@ -46,9 +49,11 @@ export default function StudentPortal({ onSwitchToAdmin }: StudentPortalProps) {
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
-      const [venuesRes, annRes] = await Promise.all([
+      const [venuesRes, annRes, messRes, timingsRes] = await Promise.all([
         apiRequest('/venues'),
-        apiRequest('/announcements')
+        apiRequest('/announcements'),
+        apiRequest('/mess-menu'),
+        apiRequest('/mess-menu/timings')
       ])
       
       if (venuesRes.success && venuesRes.data) {
@@ -56,9 +61,14 @@ export default function StudentPortal({ onSwitchToAdmin }: StudentPortalProps) {
         setVenues(venueList)
       }
       if (annRes.success && annRes.data) {
-        // Filter only published announcements
         const list = annRes.data.announcements || annRes.data || []
         setAnnouncements(list.filter((a: any) => a.status === 'PUBLISHED'))
+      }
+      if (messRes.success && messRes.data) {
+        setWeeklyMessMenu(messRes.data)
+      }
+      if (timingsRes.success && timingsRes.data) {
+        setMessTimings(timingsRes.data)
       }
       setLoading(false)
     }
@@ -231,6 +241,21 @@ export default function StudentPortal({ onSwitchToAdmin }: StudentPortalProps) {
             </div>
           </div>
           
+          <div className="flex rounded-lg border text-xs overflow-hidden bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+            <button
+              onClick={() => setActiveTab('OUTLETS')}
+              className={`px-3 py-1.5 font-medium transition-all ${activeTab === 'OUTLETS' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+            >
+              Outlets Map
+            </button>
+            <button
+              onClick={() => setActiveTab('MESS_MENU')}
+              className={`px-3 py-1.5 font-medium transition-all ${activeTab === 'MESS_MENU' ? 'bg-indigo-600 text-white shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+            >
+              Hostel Mess Menu
+            </button>
+          </div>
+          
           <div className="flex items-center gap-3">
             <Button
               onClick={onSwitchToAdmin}
@@ -249,13 +274,15 @@ export default function StudentPortal({ onSwitchToAdmin }: StudentPortalProps) {
       <section className="relative overflow-hidden bg-gradient-to-b from-indigo-50/50 to-transparent dark:from-indigo-950/10 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-semibold mb-4 border border-indigo-100 dark:border-indigo-900/50">
-            <Sparkles className="size-3" /> Campus Food Outlets Live Status
+            <Sparkles className="size-3" /> {activeTab === 'OUTLETS' ? 'Campus Food Outlets Live Status' : 'Hostel Meals & Menu Timetable'}
           </div>
           <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl text-zinc-900 dark:text-white">
-            Skip the Queues, Dine Smart
+            {activeTab === 'OUTLETS' ? 'Skip the Queues, Dine Smart' : 'Weekly Mess Menu & Ratings'}
           </h2>
           <p className="mt-3 max-w-xl mx-auto text-sm sm:text-base text-zinc-500 dark:text-zinc-400 font-medium">
-            Check real-time opening hours, view menus, see coordinates on campus maps, and read peer reviews of all food joints.
+            {activeTab === 'OUTLETS' 
+              ? 'Check real-time opening hours, view menus, see coordinates on campus maps, and read peer reviews of all food joints.'
+              : 'Review daily meal schedules across campus hostels, view operating hours, and rate today\'s dishes.'}
           </p>
         </div>
       </section>
@@ -282,136 +309,249 @@ export default function StudentPortal({ onSwitchToAdmin }: StudentPortalProps) {
           </div>
         )}
 
-        {/* Live Interactive Map Section */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold tracking-tight flex items-center gap-1.5">
-              <MapPin className="size-4 text-indigo-600" /> Interactive Outlets Map
-            </h3>
-          </div>
-          <div className="w-full h-80 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white shadow-sm">
-            <iframe
-              ref={mapRef}
-              src="/map-view.html"
-              className="w-full h-full border-none"
-              title="Campus Map"
-            />
-          </div>
-        </section>
+        {activeTab === 'OUTLETS' ? (
+          <>
+            {/* Live Interactive Map Section */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold tracking-tight flex items-center gap-1.5">
+                  <MapPin className="size-4 text-indigo-600" /> Interactive Outlets Map
+                </h3>
+              </div>
+              <div className="w-full h-80 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white shadow-sm">
+                <iframe
+                  ref={mapRef}
+                  src="/map-view.html"
+                  className="w-full h-full border-none"
+                  title="Campus Map"
+                />
+              </div>
+            </section>
 
-        {/* Filters and Search */}
-        <section className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search outlet name, description, building..."
-              className="pl-10 h-10 text-xs w-full"
-            />
-          </div>
-          
-          <div className="flex flex-wrap gap-3 w-full md:w-auto">
-            <div className="flex-1 md:w-44">
-              <Select value={selectedBuilding} onValueChange={setSelectedBuilding}>
-                <SelectTrigger className="h-10 text-xs"><SelectValue placeholder="All Buildings" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Buildings</SelectItem>
-                  {buildings.filter(b => b !== 'ALL').map(b => (
-                    <SelectItem key={b} value={b}>{b}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1 md:w-44">
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="h-10 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All Statuses</SelectItem>
-                  <SelectItem value="OPEN">Open</SelectItem>
-                  <SelectItem value="CLOSED">Closed</SelectItem>
-                  <SelectItem value="TEMPORARILY_CLOSED">Temporarily Closed</SelectItem>
-                  <SelectItem value="MAINTENANCE">Under Maintenance</SelectItem>
-                  <SelectItem value="COMING_SOON">Coming Soon</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </section>
+            {/* Filters and Search */}
+            <section className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+              <div className="relative w-full md:max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search outlet name, description, building..."
+                  className="pl-10 h-10 text-xs w-full"
+                />
+              </div>
+              
+              <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                <div className="flex-1 md:w-44">
+                  <Select value={selectedBuilding} onValueChange={(val) => setSelectedBuilding(val || 'ALL')}>
+                    <SelectTrigger className="h-10 text-xs"><SelectValue placeholder="All Buildings" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Buildings</SelectItem>
+                      {buildings.filter(b => b !== 'ALL').map(b => (
+                        <SelectItem key={b} value={b}>{b}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 md:w-44">
+                  <Select value={selectedStatus} onValueChange={(val) => setSelectedStatus(val || 'ALL')}>
+                    <SelectTrigger className="h-10 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Statuses</SelectItem>
+                      <SelectItem value="OPEN">Open</SelectItem>
+                      <SelectItem value="CLOSED">Closed</SelectItem>
+                      <SelectItem value="TEMPORARILY_CLOSED">Temporarily Closed</SelectItem>
+                      <SelectItem value="MAINTENANCE">Under Maintenance</SelectItem>
+                      <SelectItem value="COMING_SOON">Coming Soon</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </section>
 
-        {/* Outlets Listing */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="animate-spin size-8 border-2 border-indigo-600 border-t-transparent rounded-full" />
-            <p className="text-xs text-zinc-400">Loading campus outlets...</p>
-          </div>
-        ) : filteredVenues.length === 0 ? (
-          <div className="text-center py-16 bg-white dark:bg-zinc-900 border rounded-2xl border-dashed">
-            <AlertCircle className="size-8 mx-auto text-zinc-300 dark:text-zinc-600" />
-            <h3 className="mt-2 text-sm font-semibold">No outlets found</h3>
-            <p className="text-xs text-zinc-400 mt-1">Try adjusting your filters or search query.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredVenues.map((venue) => {
-              const openNow = isOutletOpen(venue)
-              const statusColors: Record<string, string> = {
-                OPEN: openNow ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400 border border-red-200/50',
-                CLOSED: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400 border border-red-200/50',
-                TEMPORARILY_CLOSED: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200/50',
-                COMING_SOON: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-200/50',
-                MAINTENANCE: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50'
-              }
+            {/* Outlets Listing */}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="animate-spin size-8 border-2 border-indigo-600 border-t-transparent rounded-full" />
+                <p className="text-xs text-zinc-400">Loading campus outlets...</p>
+              </div>
+            ) : filteredVenues.length === 0 ? (
+              <div className="text-center py-16 bg-white dark:bg-zinc-900 border rounded-2xl border-dashed">
+                <AlertCircle className="size-8 mx-auto text-zinc-300 dark:text-zinc-600" />
+                <h3 className="mt-2 text-sm font-semibold">No outlets found</h3>
+                <p className="text-xs text-zinc-400 mt-1">Try adjusting your filters or search query.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredVenues.map((venue) => {
+                  const openNow = isOutletOpen(venue)
+                  const statusColors: Record<string, string> = {
+                    OPEN: openNow ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400 border border-red-200/50',
+                    CLOSED: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400 border border-red-200/50',
+                    TEMPORARILY_CLOSED: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200/50',
+                    COMING_SOON: 'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 border border-blue-200/50',
+                    MAINTENANCE: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50'
+                  }
 
-              const statusLabels: Record<string, string> = {
-                OPEN: openNow ? 'Open Now' : 'Closed',
-                CLOSED: 'Closed',
-                TEMPORARILY_CLOSED: 'Temp Closed',
-                COMING_SOON: 'Coming Soon',
-                MAINTENANCE: 'Maintenance'
-              }
+                  const statusLabels: Record<string, string> = {
+                    OPEN: openNow ? 'Open Now' : 'Closed',
+                    CLOSED: 'Closed',
+                    TEMPORARILY_CLOSED: 'Temp Closed',
+                    COMING_SOON: 'Coming Soon',
+                    MAINTENANCE: 'Maintenance'
+                  }
 
-              const firstImage = venue.images && venue.images.length > 0 ? venue.images[0].url : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400'
+                  const firstImage = venue.images && venue.images.length > 0 ? venue.images[0].url : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=400'
 
-              return (
-                <motion.div
-                  key={venue.id}
-                  layoutId={`venue-card-${venue.id}`}
-                  onClick={() => handleOpenVenueDetails(venue)}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl overflow-hidden cursor-pointer hover:shadow-md hover:border-indigo-500/20 dark:hover:border-indigo-400/20 transition-all flex flex-col group"
-                >
-                  <div className="h-44 w-full overflow-hidden relative bg-zinc-100 dark:bg-zinc-800">
-                    <img
-                      src={firstImage}
-                      alt={venue.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute top-3 left-3">
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-sm ${statusColors[venue.status] || ''}`}>
-                        {statusLabels[venue.status]}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-5 flex-1 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-bold text-sm tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                          {venue.name}
-                        </h4>
+                  return (
+                    <motion.div
+                      key={venue.id}
+                      layoutId={`venue-card-${venue.id}`}
+                      onClick={() => handleOpenVenueDetails(venue)}
+                      className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl overflow-hidden cursor-pointer hover:shadow-md hover:border-indigo-500/20 dark:hover:border-indigo-400/20 transition-all flex flex-col group"
+                    >
+                      <div className="h-44 w-full overflow-hidden relative bg-zinc-100 dark:bg-zinc-800">
+                        <img
+                          src={firstImage}
+                          alt={venue.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute top-3 left-3">
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm backdrop-blur-sm ${statusColors[venue.status] || ''}`}>
+                            {statusLabels[venue.status]}
+                          </span>
+                        </div>
                       </div>
-                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2">{venue.description || 'No description provided.'}</p>
-                    </div>
-                    
-                    <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
-                      <span className="flex items-center gap-1"><MapPin className="size-3.5" /> {venue.building || 'Campus'}</span>
-                      <span className="text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                        Menu <ChevronRight className="size-3" />
+                      <div className="p-5 flex-1 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-sm tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                              {venue.name}
+                            </h4>
+                          </div>
+                          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2">{venue.description || 'No description provided.'}</p>
+                        </div>
+                        
+                        <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
+                          <span className="flex items-center gap-1"><MapPin className="size-3.5" /> {venue.building || 'Campus'}</span>
+                          <span className="text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                            Menu <ChevronRight className="size-3" />
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Service hours timetable */}
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-6 shadow-sm">
+              <h3 className="text-sm font-bold tracking-tight mb-4 flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                <Clock className="size-4" /> Mess Timetable & Service Hours
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {messTimings.map((t: any) => {
+                  const formatTime = (timeStr: string) => {
+                    const [hStr, mStr] = timeStr.split(':')
+                    const h = parseInt(hStr)
+                    const ampm = h >= 12 ? 'PM' : 'AM'
+                    const hour = h % 12 === 0 ? 12 : h % 12
+                    return `${hour}:${mStr} ${ampm}`
+                  }
+                  return (
+                    <div key={t.mealType} className="p-3 bg-zinc-50 dark:bg-zinc-950 border rounded-xl flex flex-col justify-between">
+                      <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                        {t.mealType.replace('_', ' ')}
+                      </span>
+                      <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mt-1">
+                        {formatTime(t.openingTime)} - {formatTime(t.closingTime)}
                       </span>
                     </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Weekly Days List */}
+            <div className="space-y-6">
+              {['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map((dayName) => {
+                const dayMeals = weeklyMessMenu.filter((m: any) => m.day === dayName)
+                const isMenuAvailable = dayMeals.length > 0
+
+                return (
+                  <div key={dayName} className="bg-white dark:bg-zinc-900 border rounded-2xl p-6 shadow-sm border-zinc-200/80 dark:border-zinc-800/80">
+                    <h3 className="text-sm font-bold tracking-tight uppercase border-b pb-3 mb-4 text-zinc-900 dark:text-white">
+                      {dayName}
+                    </h3>
+                    
+                    {!isMenuAvailable ? (
+                      <div className="text-center py-6 text-zinc-400 dark:text-zinc-500 italic text-xs">
+                        Menu not available
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {dayMeals.map((meal: any) => {
+                          const avgRating = meal.ratingCount > 0 ? (meal.ratingSum / meal.ratingCount).toFixed(1) : null
+                          
+                          return (
+                            <div key={meal.id} className="p-4 bg-zinc-50 dark:bg-zinc-950 border rounded-xl flex flex-col justify-between gap-3 border-zinc-200/50 dark:border-zinc-800/50">
+                              <div>
+                                <span className="text-[9px] font-bold uppercase text-indigo-600 dark:text-indigo-400 tracking-widest">
+                                  {meal.mealType.replace('_', ' ')}
+                                </span>
+                                <h4 className="text-xs font-bold text-zinc-950 dark:text-white mt-1">
+                                  {meal.dishName.replace(` (${dayName.substring(0, 3)})`, '')}
+                                </h4>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                                <div className="flex items-center gap-1">
+                                  <Star className={`size-3.5 ${avgRating ? 'text-amber-400 fill-current' : 'text-zinc-300'}`} />
+                                  <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                                    {avgRating ? `${avgRating} (${meal.ratingCount})` : 'No rating'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-0.5">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <button
+                                      key={star}
+                                      onClick={async () => {
+                                        toast.loading('Submitting rating...', { id: 'rating-sub' })
+                                        const res = await apiRequest(`/mess-menu/${meal.id}/rate`, {
+                                          method: 'POST',
+                                          body: JSON.stringify({ rating: star }),
+                                        })
+                                        toast.dismiss('rating-sub')
+                                        if (res.success) {
+                                          toast.success('Thank you for rating!')
+                                          const updatedRes = await apiRequest('/mess-menu')
+                                          if (updatedRes.success && updatedRes.data) {
+                                            setWeeklyMessMenu(updatedRes.data)
+                                          }
+                                        } else {
+                                          toast.error('Failed to submit rating')
+                                        }
+                                      }}
+                                      className="size-5 flex items-center justify-center hover:scale-110 transition-transform text-zinc-300 hover:text-amber-400 focus:outline-none"
+                                      title={`Rate ${star} star`}
+                                    >
+                                      <Star className="size-3 hover:fill-current" />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                </motion.div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         )}
       </main>
@@ -576,7 +716,7 @@ export default function StudentPortal({ onSwitchToAdmin }: StudentPortalProps) {
                         <label className="text-[10px] font-semibold text-zinc-400">Rating Stars</label>
                         <Select
                           value={newReviewRating.toString()}
-                          onValueChange={(val) => setNewReviewRating(parseInt(val))}
+                          onValueChange={(val) => setNewReviewRating(parseInt(val || '5'))}
                         >
                           <SelectTrigger className="h-8 text-[11px]"><SelectValue /></SelectTrigger>
                           <SelectContent>

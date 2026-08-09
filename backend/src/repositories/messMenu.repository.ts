@@ -92,4 +92,14 @@ export class MessMenuRepository {
       });
     });
   }
+
+  static async rateItem(id: string, rating: number) {
+    return prisma.messMenu.update({
+      where: { id },
+      data: {
+        ratingSum: { increment: rating },
+        ratingCount: { increment: 1 },
+      },
+    });
+  }
 }

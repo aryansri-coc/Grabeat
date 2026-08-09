@@ -84,6 +84,6 @@ export const uploadMenuItemImage = asyncHandler(async (req: AuthenticatedRequest
     throw new AppError('No file uploaded', 400);
   }
 
-  const result = await uploadToCloudinary(req.file.buffer, 'menu-items');
+  const result = await uploadToCloudinary(req.file.buffer, 'products');
   return sendSuccess(res, 'Image uploaded successfully to Cloudinary', result);
 });

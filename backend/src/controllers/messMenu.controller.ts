@@ -63,3 +63,15 @@ export const duplicateDayMenu = asyncHandler(async (req: AuthenticatedRequest, r
   const result = await MessMenuService.duplicateDayMenu(actor, sourceDay, targetDay);
   return sendSuccess(res, `Mess menu duplicated from ${sourceDay} to ${targetDay} successfully`, result);
 });
+
+export const rateMessMenuItem = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const id = req.params.id;
+  const rating = Number(req.body.rating);
+
+  if (isNaN(rating)) {
+    throw new AppError('Rating must be a number', 400);
+  }
+
+  const result = await MessMenuService.rateMessMenuItem(id, rating);
+  return sendSuccess(res, 'Dish rated successfully', result);
+});
